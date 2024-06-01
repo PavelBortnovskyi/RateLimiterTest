@@ -11,6 +11,6 @@ public class TestController {
 
     @GetMapping("/test")
     public ResponseEntity<String> test() {
-      return ResponseEntity.ok("Some info according your request");
+      return ResponseEntity.ok("Some info according to your request");
     }
 }
