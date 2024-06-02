@@ -19,9 +19,8 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 public class RateLimiter {
 
-    private final Map<String, Limit> limits = new ConcurrentHashMap<>();
+    private final Map<String, Limit> limits = new ConcurrentHashMap<>(1000);
     private final List<String> ipHeaders = new CopyOnWriteArrayList<>();
-    private final String UNKNOWN = "unknown";
 
     @PostConstruct
     private void basicInit() {
@@ -32,7 +31,7 @@ public class RateLimiter {
     }
 
     public void addClientLimit(String clientIP, int maxRequestsPerPeriod, int timePeriodInMillis) {
-        limits.put(clientIP, new Limit(maxRequestsPerPeriod, timePeriodInMillis, new ArrayList<>()));
+        limits.put(clientIP, new Limit(maxRequestsPerPeriod, timePeriodInMillis, new CopyOnWriteArrayList<>()));
     }
 
     private void addRequestToChronicle(String clientIP) {
@@ -52,7 +51,7 @@ public class RateLimiter {
     }
 
     private boolean checkAddress(String ipAddress) {
-        return ipAddress == null || ipAddress.isEmpty() || ipAddress.equalsIgnoreCase(UNKNOWN);
+        return ipAddress == null || ipAddress.isEmpty() || ipAddress.equalsIgnoreCase("unknown");
     }
 
     public boolean isAllowed(HttpServletRequest req) {
@@ -60,17 +59,14 @@ public class RateLimiter {
         log.info("Client IP: {}", clientIP);
         if (!limits.containsKey(clientIP)) return true;
         else {
-            addRequestToChronicle(clientIP);
             Limit clientLimit = limits.get(clientIP);
             Instant threshold = Instant.now().minusMillis(clientLimit.getTimePeriodInMillis());
 
-            List<Instant> clientRequestChronicle = clientLimit.getRequestChronicle().stream()
-                    .filter(t -> t.isAfter(threshold))
-                    .collect(Collectors.toList());
-            clientLimit.setRequestChronicle(clientRequestChronicle);
-            limits.replace(clientIP, clientLimit);
-
-            return clientRequestChronicle.size() <= clientLimit.getMaxRequestsPerPeriod();
+            synchronized (clientLimit) {
+                addRequestToChronicle(clientIP);
+                clientLimit.getRequestChronicle().removeIf(t -> t.isBefore(threshold));
+                return clientLimit.getRequestChronicle().size() <= clientLimit.getMaxRequestsPerPeriod();
+            }
         }
     }
 }

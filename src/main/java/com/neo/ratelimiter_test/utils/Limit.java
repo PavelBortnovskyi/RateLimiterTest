@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @Setter
@@ -17,5 +18,5 @@ public class Limit {
 
     private long timePeriodInMillis;
 
-    private List<Instant> requestChronicle;
+    private CopyOnWriteArrayList<Instant> requestChronicle;
 }
