@@ -21,8 +21,6 @@ public class RequestRateFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        //Client limit for test
-        rateLimiter.addClientLimit("0:0:0:0:0:0:0:1", 3, 3000);
         if (rateLimiter.isAllowed(request)) {
             log.info("Rate filter passed");
             doFilter(request, response, filterChain);

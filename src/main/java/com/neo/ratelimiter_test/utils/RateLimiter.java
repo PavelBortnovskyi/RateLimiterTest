@@ -22,9 +22,11 @@ public class RateLimiter {
     private final String UNKNOWN = "unknown";
 
     @PostConstruct
-    private void setIpHeaders() {
+    private void basicInit() {
         ipHeaders.add("X-Forwarded-For");
         ipHeaders.add("X-Real-IP");
+        //This should be configured somewhere in business logic. Now it is here just for test
+        this.addClientLimit("0:0:0:0:0:0:0:1", 3, 3000);
     }
 
     public void addClientLimit(String clientIP, int maxRequestsPerPeriod, int timePeriodInMillis) {
