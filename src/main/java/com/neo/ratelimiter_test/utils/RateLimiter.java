@@ -7,6 +7,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
@@ -17,8 +18,7 @@ import java.util.stream.Collectors;
 public class RateLimiter {
 
     private final ConcurrentHashMap<String, Limit> limits = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, CopyOnWriteArrayList<Instant>> requestChronicle = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<String> ipHeaders = new CopyOnWriteArrayList<>();
+    private final ArrayList<String> ipHeaders = new ArrayList<>();
     private final String UNKNOWN = "unknown";
 
     @PostConstruct
@@ -30,16 +30,12 @@ public class RateLimiter {
     }
 
     public void addClientLimit(String clientIP, int maxRequestsPerPeriod, int timePeriodInMillis) {
-        limits.put(clientIP, new Limit(maxRequestsPerPeriod, timePeriodInMillis));
+        limits.put(clientIP, new Limit(maxRequestsPerPeriod, timePeriodInMillis, new CopyOnWriteArrayList<>()));
     }
 
     private void addRequestToChronicle(String clientIP) {
-        if (requestChronicle.containsKey(clientIP)) {
-            requestChronicle.get(clientIP).add(Instant.now());
-        } else {
-            requestChronicle.put(clientIP, new CopyOnWriteArrayList<>(){{
-                add(Instant.now());
-            }});
+        if (limits.containsKey(clientIP)) {
+            limits.get(clientIP).getRequestChronicle().add(Instant.now());
         }
     }
 
@@ -62,11 +58,16 @@ public class RateLimiter {
         if (!limits.containsKey(clientIP)) return true;
         else {
             addRequestToChronicle(clientIP);
-            CopyOnWriteArrayList<Instant> clientRequestChronicle = requestChronicle.get(clientIP).stream()
-                    .filter(t -> t.isAfter(Instant.now().minusMillis(limits.get(clientIP).timePeriodInMillis())))
+            Limit clientLimit = limits.get(clientIP);
+            Instant threshold = Instant.now().minusMillis(clientLimit.getTimePeriodInMillis());
+
+            CopyOnWriteArrayList<Instant> clientRequestChronicle = clientLimit.getRequestChronicle().stream()
+                    .filter(t -> t.isAfter(threshold))
                     .collect(Collectors.toCollection(CopyOnWriteArrayList::new));
-            requestChronicle.replace(clientIP, clientRequestChronicle);
-            return clientRequestChronicle.size() <= limits.get(clientIP).maxRequestsPerPeriod();
+            clientLimit.setRequestChronicle(clientRequestChronicle);
+            limits.replace(clientIP, clientLimit);
+
+            return clientRequestChronicle.size() <= clientLimit.getMaxRequestsPerPeriod();
         }
     }
 }
